@@ -1,0 +1,40 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+#define QUANTUM_SENSOR A0  // Analog pin for photodiode
+#define SAMPLE_SIZE 256  // Number of samples for randomness analysis
+
+const char* ssid = "YOUR_WIFI_SSID";
+const char* password = "YOUR_WIFI_PASSWORD";
+const char* mqtt_server = "broker.hivemq.com"; 
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
+  client.setServer(mqtt_server, 1883);
+}
+
+void loop() {
+  if (!client.connected()) { client.connect("ESP32_QRNG"); }
+  client.loop();
+
+  int rawEntropy[SAMPLE_SIZE];
+
+  for (int i = 0; i < SAMPLE_SIZE; i++) {
+    rawEntropy[i] = analogRead(QUANTUM_SENSOR) % 2; // Get random bit (0 or 1)
+  }
+
+  String payload = "{ \"entropy\": [";
+  for (int i = 0; i < SAMPLE_SIZE; i++) {
+    payload += String(rawEntropy[i]) + ((i < SAMPLE_SIZE - 1) ? "," : "");
+  }
+  payload += "] }";
+
+  client.publish("qrng/data", payload.c_str());
+  Serial.println(payload);
+  delay(5000);
+}
